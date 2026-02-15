@@ -60,11 +60,13 @@ body {
 .stat-card.warning {
   background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
   color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .stat-card.success {
   background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
   color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .stat-number {
@@ -75,7 +77,8 @@ body {
 
 .stat-label {
   font-size: 0.9em;
-  opacity: 0.8;
+  opacity: 0.95;
+  font-weight: 500;
 }
 
 .view-selector {
@@ -166,7 +169,8 @@ body {
 
 .student-details {
   font-size: 0.9em;
-  opacity: 0.7;
+  opacity: 0.85;
+  color: #555;
 }
 
 .risk-badge {
@@ -234,8 +238,9 @@ body {
 
 .metric-label {
   font-size: 0.85em;
-  opacity: 0.9;
+  opacity: 1;
   margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .metric-value {
@@ -349,7 +354,7 @@ body {
   .main-content {
     grid-template-columns: 1fr;
   }
-  
+
   .students-list {
     max-height: 400px;
   }
