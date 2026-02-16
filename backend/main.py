@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from database.init_db import SessionLocal, get_db
 from models.student import Student, Grade, Attendance
 from services.risk_calculator import RiskCalculator
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pydantic import BaseModel
 import uvicorn
 from openai import OpenAI
@@ -409,6 +409,277 @@ def what_if_scenario(student_id: int, next_gpa: float, db: Session = Depends(get
     predictor = MLPredictor(db)
     analysis = predictor.what_if_analysis(student_id, next_gpa)
     return analysis
+
+
+# ========== EXPLAINABLE AI ENDPOINTS ==========
+
+@app.get("/api/explainable/risk/{student_id}")
+def get_explainable_risk(student_id: int, db: Session = Depends(get_db)):
+    """Get comprehensive explainable risk assessment"""
+    from services.explainability_engine import ExplainabilityEngine
+    from services.risk_calculator import RiskCalculator
+    
+    calculator = RiskCalculator(db)
+    risk_data = calculator.calculate_risk_score(student_id)
+    
+    if not risk_data:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    explainer = ExplainabilityEngine(db)
+    explanation = explainer.explain_risk_score(student_id, risk_data)
+    
+    return explanation
+
+
+# ========== CAREER PREDICTION ENDPOINTS ==========
+
+@app.get("/api/career/predict/{student_id}")
+def predict_career_paths(student_id: int, top_n: int = 5, db: Session = Depends(get_db)):
+    """Predict suitable career paths based on academic performance"""
+    from services.career_predictor import CareerPredictor
+    
+    predictor = CareerPredictor(db)
+    predictions = predictor.predict_career_paths(student_id, top_n)
+    
+    if "error" in predictions:
+        raise HTTPException(status_code=404, detail=predictions["error"])
+    
+    return predictions
+
+
+# ========== WELLBEING & STRESS DETECTION ENDPOINTS ==========
+
+@app.get("/api/wellbeing/analyze/{student_id}")
+def analyze_wellbeing(student_id: int, db: Session = Depends(get_db)):
+    """Analyze student wellbeing and stress levels"""
+    from services.stress_detector import StressDetector
+    
+    detector = StressDetector(db)
+    analysis = detector.analyze_student_wellbeing(student_id)
+    
+    if "error" in analysis:
+        raise HTTPException(status_code=404, detail=analysis["error"])
+    
+    return analysis
+
+
+# ========== MULTILINGUAL RAG CHAT ENDPOINTS ==========
+
+class MultilingualChatRequest(BaseModel):
+    query: str
+    student_id: Optional[int] = None
+    language: Optional[str] = None
+
+@app.post("/api/chat/multilingual")
+def multilingual_chat(request: MultilingualChatRequest, db: Session = Depends(get_db)):
+    """Process multilingual natural language queries using RAG"""
+    from services.rag_engine import RAGEngine
+    from services.multilingual_nlu import MultilingualNLU
+    
+    openai_key = os.getenv('OPENAI_API_KEY')
+    if not openai_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    # Process with multilingual NLU
+    nlu = MultilingualNLU(openai_key)
+    processed = nlu.process_multilingual_query(request.query)
+    
+    # Generate RAG response
+    rag = RAGEngine(db, openai_key)
+    language = request.language or processed['detected_language']
+    
+    response = rag.generate_response(
+        query=processed['processed_query'],
+        student_id=request.student_id,
+        include_context=bool(request.student_id),
+        language=language
+    )
+    
+    return {
+        "original_query": request.query,
+        "detected_language": processed['language_name'],
+        "intent": processed['intent'],
+        **response
+    }
+
+
+# ========== AGENTIC WORKFLOW ENDPOINTS ==========
+
+class AgenticQueryRequest(BaseModel):
+    query: str
+
+@app.post("/api/agent/execute")
+def execute_agentic_workflow(request: AgenticQueryRequest, db: Session = Depends(get_db)):
+    """Execute autonomous agentic workflow to answer complex queries"""
+    from services.agentic_workflow import AgenticWorkflow
+    
+    openai_key = os.getenv('OPENAI_API_KEY')
+    if not openai_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    agent = AgenticWorkflow(db, openai_key)
+    result = agent.execute_workflow(request.query)
+    
+    return result
+
+
+# ========== COMPREHENSIVE DASHBOARD ENDPOINT ==========
+
+@app.get("/api/comprehensive/dashboard/{student_id}")
+def get_comprehensive_dashboard(student_id: int, db: Session = Depends(get_db)):
+    """Get all analytics for a student in one call"""
+    from services.risk_calculator import RiskCalculator
+    from services.explainability_engine import ExplainabilityEngine
+    from services.career_predictor import CareerPredictor
+    from services.stress_detector import StressDetector
+    
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Risk assessment
+    calculator = RiskCalculator(db)
+    risk_data = calculator.calculate_risk_score(student_id)
+    
+    # Explainable assessment
+    explainer = ExplainabilityEngine(db)
+    explanation = explainer.explain_risk_score(student_id, risk_data)
+    
+    # Career predictions
+    career_predictor = CareerPredictor(db)
+    careers = career_predictor.predict_career_paths(student_id, top_n=3)
+    
+    # Wellbeing analysis
+    stress_detector = StressDetector(db)
+    wellbeing = stress_detector.analyze_student_wellbeing(student_id)
+    
+    return {
+        "student_info": {
+            "id": student.id,
+            "name": student.name,
+            "roll_number": student.roll_number,
+            "branch": student.branch,
+            "semester": student.current_semester
+        },
+        "risk_assessment": risk_data,
+        "explainable_analysis": explanation,
+        "career_recommendations": careers,
+        "wellbeing_assessment": wellbeing,
+        "generated_at": "2026-02-16T00:00:00"
+    }
+
+
+# ========== MENTOR DASHBOARD ENDPOINTS ==========
+
+@app.get("/api/mentor/students")
+def get_all_students_overview(db: Session = Depends(get_db)):
+    """Get overview of all students for mentor dashboard"""
+    from services.risk_calculator import RiskCalculator
+    
+    calculator = RiskCalculator(db)
+    students = db.query(Student).all()
+    
+    overview = []
+    for student in students:
+        risk_data = calculator.calculate_risk_score(student.id)
+        overview.append({
+            "id": student.id,
+            "name": student.name,
+            "roll_number": student.roll_number,
+            "branch": student.branch,
+            "semester": student.current_semester,
+            "risk_score": risk_data.get('risk_score', 0),
+            "risk_level": risk_data.get('risk_level', 'Unknown'),
+            "cgpa": risk_data.get('cgpa', 0)
+        })
+    
+    # Sort by risk score (highest first)
+    overview.sort(key=lambda x: x['risk_score'], reverse=True)
+    
+    return {
+        "total_students": len(overview),
+        "high_risk_count": len([s for s in overview if s['risk_level'] == 'High']),
+        "moderate_risk_count": len([s for s in overview if s['risk_level'] == 'Moderate']),
+        "low_risk_count": len([s for s in overview if s['risk_level'] == 'Low']),
+        "students": overview
+    }
+
+
+# ========== DATA MANAGEMENT ENDPOINTS ==========
+
+@app.post("/api/data/add-mentor-note")
+def add_mentor_note(student_id: int, note_text: str, sentiment: str = "neutral", db: Session = Depends(get_db)):
+    """Add a mentor observation note for a student"""
+    from models.student import MentorNote
+    from datetime import datetime
+    
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    note = MentorNote(
+        student_id=student_id,
+        note_text=note_text,
+        note_date=datetime.now(),
+        sentiment=sentiment
+    )
+    
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    
+    # Index in RAG system
+    from services.rag_engine import RAGEngine
+    openai_key = os.getenv('OPENAI_API_KEY')
+    if openai_key:
+        rag = RAGEngine(db, openai_key)
+        rag.index_mentor_note(
+            note_id=note.id,
+            student_id=student_id,
+            note_text=note_text,
+            metadata={"sentiment": sentiment, "date": datetime.now().isoformat()}
+        )
+    
+    return {
+        "success": True,
+        "note_id": note.id,
+        "message": "Mentor note added and indexed successfully"
+    }
+
+
+@app.post("/api/data/add-behavioral-log")
+def add_behavioral_log(
+    student_id: int,
+    engagement_level: Optional[float] = None,
+    stress_level: Optional[float] = None,
+    notes: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Add a behavioral observation log"""
+    from models.student import BehavioralLog
+    from datetime import datetime
+    
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    log = BehavioralLog(
+        student_id=student_id,
+        log_date=datetime.now(),
+        engagement_level=engagement_level,
+        stress_level=stress_level,
+        notes=notes
+    )
+    
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    
+    return {
+        "success": True,
+        "log_id": log.id,
+        "message": "Behavioral log added successfully"
+    }
 
 
 # Run the server
